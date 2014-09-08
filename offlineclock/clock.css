@@ -1,0 +1,14 @@
+/* clock.css */
+output { 
+	font: 2em sans-serif; 
+}
+.clockface {
+	max-width: 800px;
+	margin: auto;
+	background: purple;
+	border-radius: 22px;
+	border: 1px solid black;
+	text-align: center;
+	color: white;
+}
+
