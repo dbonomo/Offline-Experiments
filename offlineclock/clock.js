@@ -7,7 +7,7 @@ function updateIndicator() {
 }
 //Sets an interval defined below
 setInterval(function () {
-    //gets the clock element and appends the computers set date 
+    //gets the clock element and appends the computer set date 
     document.getElementById('clock').value = new Date();
     //Currently sets the interval to 1000ms (1sec)
 }, 1000);

@@ -1,6 +1,6 @@
 <!-- clock.html -->
 <!DOCTYPE HTML>
-<html manifest="cache.manifest">
+<html manifest="off.cache.manifest">
  <head>
   <title>Clock</title>
   <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.js"></script>
@@ -9,25 +9,11 @@
  </head>
 <body onload="updateIndicator()" ononline="updateIndicator()" onoffline="updateIndicator()">
   <div class="clockface">
-  	<p>The time is: <br />
-  	<output id="clock"></output>
-  </p>
+    <p>
+    	<output id="clock"></output>
+    </p>
   	The Network is: <span id="indicator">(state unknown)</span>
-  	<div class="small">Updates every 1 second (1000ms) kapow</div>
-
-  	<div class="textdemo">
-  		<form>
-  			<textarea id="field">
-  				
-  			</textarea>
-  		</form>
-  	</div>
-  	<div class="devlog">
-  		<ul class="log">
-  			<li class="logitem">added jquery and modernizr</li>
-  			<li class="logitem">added the offline/online buit in browser indicator</li>
-  		</ul>
-  	</div>
+  	<div class="small">Updates every 1 second (1000ms)</div>
   </div>
  </body>
 </html>
