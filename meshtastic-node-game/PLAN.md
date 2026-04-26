@@ -14,56 +14,44 @@ sensors, region, and signal metrics. The app encourages exploring, traveling to 
 areas, and encountering rare/unusual hardware.
 
 ### Core Loop
-1. **Detect** — A node appears on the mesh many hops away — you see a silhouette
-2. **Encounter** — You get closer (fewer hops, stronger signal) — details start filling in
-3. **Capture** — Direct RF contact (0-1 hops, strong SNR) — full collection entry unlocked
-4. **Catalog** — Progress bars show how many of the 127 hardware models, 12 roles,
-   22 regions, 50 sensor types you've fully captured
-5. **Share** — Export your collection as JSON to load into a community website
+1. **Have your radio on** — just use Meshtastic like normal
+2. **Collect** — every RF node you hear gets logged to your MeshDex automatically
+3. **Browse** — see what hardware models, roles, and setups you've encountered
+4. **Notice** — "oh cool, first WIPHONE I've ever seen" or "I keep seeing that same RAK4631"
+5. **Share** — export your collection as JSON, eventually compare with the community
 
-### Encounter Tiers (Proximity-Based)
+### Two Tiers: Heard vs Direct
 
-| Tier | Criteria | What You See |
+Keep it simple. Two categories:
+
+| Tier | Criteria | Meaning |
 |---|---|---|
-| **Shadow** | 3+ hops away, or weak signal (SNR < 0) | Silhouette only — you know the hw_model and node_id exist |
-| **Spotted** | 2 hops, or moderate signal (SNR 0-5) | Model name, short_name, role revealed |
-| **Encountered** | 1 hop, decent signal (SNR 5-10) | Full details visible — long_name, sensors, region, battery |
-| **Captured** | Direct (0 hops), strong signal (SNR > 10) | Fully collected — gold card, all stats, locked into MeshDex |
+| **Heard** | 1+ hops | Your radio picked up this node relayed through the mesh |
+| **Direct** | 0 hops | Your radio talked directly to this node — no relays |
 
-A node can **level up** over time. First you see a TBEAM shadow 4 hops away. Weeks
-later you're at a meetup and there it is, direct RF, strong signal — captured! The
-progression from shadow to captured tells a story about your mesh exploring.
+Direct is the special one. It means you were close enough that your radios connected
+with nothing in between. That's a real encounter. Everything else is just "heard on
+the mesh" — still counts, still collected, but direct gets a little gold star.
 
-**RF Only:** MQTT encounters (`via_mqtt=true`) are filtered out entirely. The whole
-point is getting out there with a radio. If a node is only reachable via internet
-gateway, it doesn't count.
+### RF Only
 
-### Rarity: Community-Driven
+MQTT encounters (`via_mqtt=true`) are **filtered out entirely**. The whole point is
+getting out there with a radio. If a node is only reachable via internet gateway,
+it doesn't count.
 
-Rarity tiers are **not hardcoded**. Instead, rarity is calculated dynamically from
-aggregated community data once the website has enough uploads:
+### What Makes It Fun
 
-- **Rarity Score** = 1 / (% of MeshDex users who have captured this model)
-- A model that 80% of users have → Common
-- A model that 5% of users have → Rare
-- A model that < 1% of users have → Ultra Rare
+- **Completionism** — 127 hardware models to find, most people will only ever see 10-15
+- **Rarity** — emerges from community data over time (no hardcoded tiers)
+- **Stats** — best signal, most encounters, first-seen dates, how many direct contacts
+- **Variety** — noting different setups, roles, regions, sensors out in the wild
+- **Passive** — you don't have to hunt anyone down, just have your radio on and live life
 
-Until enough community data exists, the app shows no rarity labels — just your
-collection progress. Rarity emerges organically from real-world data.
+### Privacy
 
-### Privacy: Signal-Based, Not Location-Based
-
-We store **no GPS coordinates** of other people's nodes. Instead, proximity is
-represented entirely through radio metrics:
-
-- **SNR** (signal-to-noise ratio) — how clean the signal was
-- **RSSI** (received signal strength) — how strong the signal was
-- **Hops away** — how many nodes relayed the packet
-- **Encounter tier** — derived from the above
-
-This gives you a meaningful sense of "how close was I" without revealing anyone's
-location. Your own position is never stored either unless you explicitly opt in for
-personal encounter mapping.
+- **No GPS stored** for anyone's nodes — not yours, not theirs
+- Signal metrics (SNR, RSSI, hops) tell you "how good was the signal" without "where"
+- The game rewards having your radio on, not tracking people down
 
 ---
 
@@ -82,11 +70,9 @@ Each node broadcasts its `HardwareModel` enum. Major families:
 | ThinkNode | 6 | THINKNODE_M1 through M6 |
 | Other/DIY | 49 | WIPHONE, CHATTER_2, ROUTASTIC, etc. |
 
-**Rarity tiers** (suggested):
-- **Common**: HELTEC_V3, RAK4631, TBEAM, TLORA_V2_1_1P6
-- **Uncommon**: T_ECHO, WIRELESS_TRACKER, STATION_G2
-- **Rare**: T_DECK, SENSECAP_INDICATOR, NANO_G2_ULTRA
-- **Ultra Rare**: WIPHONE, CHATTER_2, PRIVATE_HW, ANDROID_SIM, legacy devices
+Rarity is not hardcoded — it will be calculated from community data once enough
+people are using the app. Until then, just show raw counts and let users notice
+for themselves which models are common vs unusual.
 
 ### Secondary Collectibles
 
@@ -98,13 +84,12 @@ Each node broadcasts its `HardwareModel` enum. Major families:
 | Telemetry Sensors | 50 types (BME280, INA260, RADSENS, etc.) | `TelemetrySensorType` |
 | Licensed Ham Operator | boolean `is_licensed` flag | `User` |
 
-### Per-Encounter Metrics (not collectibles, but fun stats)
-- SNR, RSSI (signal quality)
-- Hop count
-- GPS position (first seen location, farthest distance)
-- Battery level, uptime
-- Via MQTT or direct RF
-- Timestamp of first/last encounter
+### Per-Node Stats (the fun stuff on each card)
+- SNR, RSSI (signal quality — best ever and most recent)
+- Hop count (and whether you've ever had direct contact)
+- Battery level, uptime (latest known)
+- Times seen (how often this node shows up)
+- First seen / last seen dates
 
 ---
 
@@ -154,22 +139,24 @@ Dependencies:
 nodes (one row per unique node — the "card")
 ├── node_num (PK, uint32 — stable Meshtastic node number)
 ├── node_id (string — "!aabbccdd" format)
-├── long_name (string, nullable — revealed at Spotted tier)
-├── short_name (string, nullable — revealed at Spotted tier)
+├── long_name (string)
+├── short_name (string)
 ├── hw_model (int — HardwareModel enum)
 ├── hw_model_name (string — human-readable)
-├── role (int, nullable — revealed at Spotted tier)
-├── is_licensed (boolean, nullable — revealed at Encountered tier)
-├── region (int, nullable — revealed at Encountered tier)
-├── modem_preset (int, nullable — revealed at Encountered tier)
-├── tier (enum — SHADOW / SPOTTED / ENCOUNTERED / CAPTURED)
+├── role (int)
+├── is_licensed (boolean)
+├── has_direct (boolean — have we ever had 0-hop contact?)
 ├── best_snr (float — best signal ever recorded)
 ├── best_rssi (int — best RSSI ever recorded)
 ├── min_hops (int — fewest hops ever recorded)
+├── last_snr (float — most recent signal)
+├── last_rssi (int)
+├── last_hops (int)
+├── last_battery (int, nullable)
 ├── first_seen (timestamp)
 ├── last_seen (timestamp)
-├── encounter_count (int)
-├── captured_at (timestamp, nullable — when tier reached CAPTURED)
+├── sighting_count (int — total times seen)
+├── direct_count (int — times seen at 0 hops)
 
 sightings (one row per RF reception — the history log)
 ├── id (PK, auto)
@@ -177,56 +164,50 @@ sightings (one row per RF reception — the history log)
 ├── snr (float)
 ├── rssi (int)
 ├── hops_away (int)
-├── tier_at_sighting (enum — what tier this sighting qualified for)
+├── is_direct (boolean — 0 hops)
 ├── timestamp (long)
-
-collection_progress (tracks "dex completion" per category)
-├── category (string — "hw_model", "role", "region", etc.)
-├── value (int — enum value)
-├── value_name (string)
-├── first_captured_at (timestamp — when first CAPTURED at this value)
-├── first_captured_node (int — FK, which node)
-├── unlocked (boolean)
 ```
 
 **Key design choices:**
-- `nodes` table only upgrades — tier goes up, never down. Best signal stats are
-  high-water marks.
-- `sightings` table is append-only — every RF reception is logged for stats/history.
+- `nodes` table keeps high-water marks (best signal, lowest hops) and latest values.
+- `has_direct` is the special flag — once true, never goes back. Gold star.
+- `sightings` table is append-only — every RF reception logged for stats/sparklines.
 - MQTT packets (`via_mqtt=true`) are **dropped before insertion** — never stored.
-- No GPS coordinates stored for other nodes. No location data at all unless the user
-  opts into storing their own position for personal encounter mapping.
+- No GPS coordinates stored for anyone.
+- `collection_progress` table removed — we can derive dex completion from the nodes
+  table with simple queries (SELECT DISTINCT hw_model, etc.).
 
 ---
 
-## App Screens
+## App Screens (MVP — subject to UI design iteration)
 
-### 1. MeshDex (Main Screen)
-Grid/list of all 127 hardware models shown as cards. Discovered ones are full color
-with details; undiscovered ones are silhouettes/greyed out. Progress bar at top:
-"12/127 Models Discovered"
+### 1. Collection (Main Screen)
+Your collected nodes. Could be a grid of cards, a list, or something else — TBD
+during UI design. Key info: what you've seen, how many, which are direct contacts.
+Progress indicator: "Seen 42 nodes / 8 models / 3 direct"
 
-### 2. Node Detail
-Tap a discovered model to see:
-- All encounters with that model type
-- First/last seen dates
-- Best signal (highest SNR)
-- Map pins of encounter locations
-- Farthest distance encountered
+### 2. Node Card
+Tap a node to see its stats:
+- Hardware model, role, name
+- Signal stats (best SNR, best RSSI, hop history)
+- Times seen, first/last dates
+- Direct contact badge if applicable
 
-### 3. Live Radar
-Real-time view of currently visible nodes from the mesh, highlighting any NEW
-(never-before-seen) models with a special animation/glow
+### 3. Live Feed
+Real-time view of nodes currently on the mesh. New (never-before-seen) nodes get
+highlighted so you notice them.
 
-### 4. Collection Stats
-- Progress rings for each category (Models, Roles, Regions, Sensors)
-- Recent discoveries timeline
-- "Achievements" (first node, 10th model, first ham operator, first MQTT node, etc.)
+### 4. Stats / Dex Completion
+- How many of the 127 hw models you've seen
+- Breakdown by role, manufacturer, etc.
+- Fun stats: most-seen node, best signal ever, total sightings
 
 ### 5. Export/Import
-- Export full encounter history as JSON
-- Import from file (merge with existing)
-- Future: upload to community website
+- Export collection as JSON
+- Import from file (merge by node_num, keep best stats)
+
+**UI design is intentionally unresolved** — we want to explore the look and feel
+before committing. The data layer and AIDL integration can proceed in parallel.
 
 ---
 
@@ -309,53 +290,48 @@ time-series of encounters that the device itself doesn't keep.
 
 ## Phase Plan
 
-### Phase 1: Proof of Concept (This Sprint)
+### Phase 1: Can We Get The Data? (Now — in parallel with UI design)
 - [ ] Android project scaffolding (Compose, Room, Meshtastic AIDL deps)
-- [ ] Service binding to Meshtastic app
-- [ ] Read and display current NodeDB
-- [ ] Room database for encounter persistence
-- [ ] Basic MeshDex grid showing discovered vs undiscovered models
+- [ ] Bind to Meshtastic app's AIDL service
+- [ ] Read the current NodeDB — prove we can get hw_model, role, signal, hops
+- [ ] Filter out MQTT nodes
+- [ ] Room database: persist nodes + sightings
+- [ ] Basic list showing what we've collected (placeholder UI)
 
-### Phase 2: Game Layer
-- [ ] Rarity tiers and visual treatment
-- [ ] Achievement system
-- [ ] Encounter detail screens with stats
-- [ ] Progress rings for all collection categories
+### Phase 2: Make It Look Good (after UI design exploration)
+- [ ] Implement the UI we design — cards, layout, colors, etc.
+- [ ] Node detail screen with stats
+- [ ] Live feed with "new node" highlighting
+- [ ] Dex completion / stats screen
 
-### Phase 3: Location & History
-- [ ] GPS integration for encounter positions
-- [ ] "Where I first saw this" map
-- [ ] Distance calculations
-- [ ] Timeline view of discoveries
-
-### Phase 4: Community
+### Phase 3: Polish & Share
 - [ ] JSON export/import
-- [ ] Community website (static, client-side)
-- [ ] Leaderboard
-- [ ] Global rarity calculations
+- [ ] Fun stats and collection milestones
+- [ ] Community rarity (once we have a website to aggregate data)
+
+### Future Ideas (not committed)
+- Points for receiving replies on LongFast
+- Community website / leaderboard
+- Sensor type collection from telemetry packets
 
 ---
 
 ## Design Decisions (Resolved)
 
 1. **RF Only** — MQTT encounters are dropped entirely. The game is about radio.
-2. **Community-Driven Rarity** — No hardcoded tiers. Rarity calculated dynamically
-   from aggregated community uploads once enough data exists.
-3. **Privacy First** — No GPS coordinates stored for other nodes. Proximity is
-   represented through SNR, RSSI, and hop count only.
-4. **Proximity Tiers** — Shadow → Spotted → Encountered → Captured progression
-   based on signal quality and hop count, like leveling up a Pokémon encounter.
-5. **Offline-first** — Works 100% without internet. Website sync is optional bonus.
-6. **Node identity** — Track by `node_num` (stable uint32). `node_id` (`!hex` string)
-   is also stable and stored, but `node_num` is the primary key.
+2. **Two tiers** — Heard (1+ hops) vs Direct (0 hops). Simple. Direct gets a gold star.
+3. **Community-Driven Rarity** — No hardcoded tiers. Rarity calculated dynamically
+   from community data once enough people are using the app.
+4. **Privacy First** — No GPS coordinates stored for anyone. Signal metrics only.
+5. **Passive collection** — The game rewards having your radio on, not hunting people.
+6. **Offline-first** — Works 100% without internet. Website sync is optional bonus.
+7. **Node identity** — Track by `node_num` (stable uint32) as primary key.
+8. **UI is TBD** — Data layer proceeds in parallel with UI design exploration.
 
 ## Open Questions
 
-1. **Tier thresholds** — The SNR/hop cutoffs for each tier need tuning with real-world
-   data. Starting values are a guess; should be configurable.
-2. **Sensor detection** — Sensors aren't directly in NodeInfo; they show up when a node
+1. **Sensor detection** — Sensors aren't directly in NodeInfo; they show up when a node
    broadcasts telemetry. Do we infer sensor types from received telemetry packets?
-3. **Node spoofing** — Meshtastic doesn't strongly authenticate node identity. Should
-   we care about fake/spoofed nodes for a casual game? Probably not initially.
-4. **Multiple devices** — If a user has two phones, can they merge MeshDex databases?
-   The JSON export/import should handle this (merge by node_num, keep best tier).
+2. **Multiple devices** — If a user has two phones, can they merge MeshDex databases?
+   JSON export/import should handle this (merge by node_num, keep best stats).
+3. **What does a "node card" look like?** — UI design exploration needed.
