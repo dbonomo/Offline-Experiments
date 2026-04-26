@@ -14,12 +14,56 @@ sensors, region, and signal metrics. The app encourages exploring, traveling to 
 areas, and encountering rare/unusual hardware.
 
 ### Core Loop
-1. **Discover** — Connect to your Meshtastic device, see nearby nodes
-2. **Catalog** — Each new node type/model fills in your "MeshDex"
-3. **Track** — Log when/where you first saw each node, signal strength, hop count
-4. **Collect** — Progress bars showing how many of the 127 hardware models, 12 roles,
-   22 regions, 50 sensor types you've encountered
+1. **Detect** — A node appears on the mesh many hops away — you see a silhouette
+2. **Encounter** — You get closer (fewer hops, stronger signal) — details start filling in
+3. **Capture** — Direct RF contact (0-1 hops, strong SNR) — full collection entry unlocked
+4. **Catalog** — Progress bars show how many of the 127 hardware models, 12 roles,
+   22 regions, 50 sensor types you've fully captured
 5. **Share** — Export your collection as JSON to load into a community website
+
+### Encounter Tiers (Proximity-Based)
+
+| Tier | Criteria | What You See |
+|---|---|---|
+| **Shadow** | 3+ hops away, or weak signal (SNR < 0) | Silhouette only — you know the hw_model and node_id exist |
+| **Spotted** | 2 hops, or moderate signal (SNR 0-5) | Model name, short_name, role revealed |
+| **Encountered** | 1 hop, decent signal (SNR 5-10) | Full details visible — long_name, sensors, region, battery |
+| **Captured** | Direct (0 hops), strong signal (SNR > 10) | Fully collected — gold card, all stats, locked into MeshDex |
+
+A node can **level up** over time. First you see a TBEAM shadow 4 hops away. Weeks
+later you're at a meetup and there it is, direct RF, strong signal — captured! The
+progression from shadow to captured tells a story about your mesh exploring.
+
+**RF Only:** MQTT encounters (`via_mqtt=true`) are filtered out entirely. The whole
+point is getting out there with a radio. If a node is only reachable via internet
+gateway, it doesn't count.
+
+### Rarity: Community-Driven
+
+Rarity tiers are **not hardcoded**. Instead, rarity is calculated dynamically from
+aggregated community data once the website has enough uploads:
+
+- **Rarity Score** = 1 / (% of MeshDex users who have captured this model)
+- A model that 80% of users have → Common
+- A model that 5% of users have → Rare
+- A model that < 1% of users have → Ultra Rare
+
+Until enough community data exists, the app shows no rarity labels — just your
+collection progress. Rarity emerges organically from real-world data.
+
+### Privacy: Signal-Based, Not Location-Based
+
+We store **no GPS coordinates** of other people's nodes. Instead, proximity is
+represented entirely through radio metrics:
+
+- **SNR** (signal-to-noise ratio) — how clean the signal was
+- **RSSI** (received signal strength) — how strong the signal was
+- **Hops away** — how many nodes relayed the packet
+- **Encounter tier** — derived from the above
+
+This gives you a meaningful sense of "how close was I" without revealing anyone's
+location. Your own position is never stored either unless you explicitly opt in for
+personal encounter mapping.
 
 ---
 
@@ -107,40 +151,51 @@ Dependencies:
 ### Room Database Tables
 
 ```
-encounters
-├── id (PK, auto)
-├── node_num (uint32 — Meshtastic node number)
+nodes (one row per unique node — the "card")
+├── node_num (PK, uint32 — stable Meshtastic node number)
 ├── node_id (string — "!aabbccdd" format)
-├── long_name (string)
-├── short_name (string)
+├── long_name (string, nullable — revealed at Spotted tier)
+├── short_name (string, nullable — revealed at Spotted tier)
 ├── hw_model (int — HardwareModel enum)
 ├── hw_model_name (string — human-readable)
-├── role (int)
-├── is_licensed (boolean)
-├── region (int)
-├── modem_preset (int)
-├── snr (float)
-├── rssi (int)
-├── hops_away (int)
-├── via_mqtt (boolean)
-├── latitude (double, nullable)
-├── longitude (double, nullable)
-├── altitude (int, nullable)
-├── battery_level (int, nullable)
+├── role (int, nullable — revealed at Spotted tier)
+├── is_licensed (boolean, nullable — revealed at Encountered tier)
+├── region (int, nullable — revealed at Encountered tier)
+├── modem_preset (int, nullable — revealed at Encountered tier)
+├── tier (enum — SHADOW / SPOTTED / ENCOUNTERED / CAPTURED)
+├── best_snr (float — best signal ever recorded)
+├── best_rssi (int — best RSSI ever recorded)
+├── min_hops (int — fewest hops ever recorded)
 ├── first_seen (timestamp)
 ├── last_seen (timestamp)
 ├── encounter_count (int)
-├── my_latitude (double, nullable — YOUR position when seen)
-├── my_longitude (double, nullable)
+├── captured_at (timestamp, nullable — when tier reached CAPTURED)
 
-collection_progress
+sightings (one row per RF reception — the history log)
+├── id (PK, auto)
+├── node_num (FK → nodes)
+├── snr (float)
+├── rssi (int)
+├── hops_away (int)
+├── tier_at_sighting (enum — what tier this sighting qualified for)
+├── timestamp (long)
+
+collection_progress (tracks "dex completion" per category)
 ├── category (string — "hw_model", "role", "region", etc.)
 ├── value (int — enum value)
 ├── value_name (string)
-├── first_seen (timestamp)
-├── first_seen_node (string — which node first showed this)
+├── first_captured_at (timestamp — when first CAPTURED at this value)
+├── first_captured_node (int — FK, which node)
 ├── unlocked (boolean)
 ```
+
+**Key design choices:**
+- `nodes` table only upgrades — tier goes up, never down. Best signal stats are
+  high-water marks.
+- `sightings` table is append-only — every RF reception is logged for stats/history.
+- MQTT packets (`via_mqtt=true`) are **dropped before insertion** — never stored.
+- No GPS coordinates stored for other nodes. No location data at all unless the user
+  opts into storing their own position for personal encounter mapping.
 
 ---
 
@@ -181,19 +236,20 @@ Real-time view of currently visible nodes from the mesh, highlighting any NEW
 {
   "version": 1,
   "exporter": "MeshDex",
-  "exported_at": "2026-03-15T12:00:00Z",
+  "exported_at": "2026-04-26T12:00:00Z",
   "owner": {
     "callsign": "KF0NZO",
     "node_id": "!aabbccdd"
   },
   "stats": {
-    "total_encounters": 234,
+    "total_sightings": 234,
     "unique_nodes": 87,
+    "captured_nodes": 42,
     "unique_models": 12,
     "unique_roles": 5,
     "unique_regions": 3
   },
-  "encounters": [
+  "nodes": [
     {
       "node_id": "!deadbeef",
       "long_name": "SomeNode",
@@ -202,23 +258,14 @@ Real-time view of currently visible nodes from the mesh, highlighting any NEW
       "hw_model_id": 43,
       "role": "CLIENT",
       "is_licensed": false,
-      "region": "US",
+      "tier": "CAPTURED",
       "first_seen": "2026-02-01T14:30:00Z",
-      "last_seen": "2026-03-14T09:15:00Z",
+      "last_seen": "2026-04-25T09:15:00Z",
+      "captured_at": "2026-03-10T16:45:00Z",
       "encounter_count": 12,
       "best_snr": 10.5,
       "best_rssi": -85,
-      "min_hops": 1,
-      "positions": [
-        {
-          "lat": 39.7392,
-          "lon": -104.9903,
-          "alt": 1609,
-          "timestamp": "2026-02-01T14:30:00Z",
-          "my_lat": 39.7400,
-          "my_lon": -104.9910
-        }
-      ]
+      "min_hops": 0
     }
   ]
 }
@@ -289,15 +336,26 @@ time-series of encounters that the device itself doesn't keep.
 
 ---
 
+## Design Decisions (Resolved)
+
+1. **RF Only** — MQTT encounters are dropped entirely. The game is about radio.
+2. **Community-Driven Rarity** — No hardcoded tiers. Rarity calculated dynamically
+   from aggregated community uploads once enough data exists.
+3. **Privacy First** — No GPS coordinates stored for other nodes. Proximity is
+   represented through SNR, RSSI, and hop count only.
+4. **Proximity Tiers** — Shadow → Spotted → Encountered → Captured progression
+   based on signal quality and hop count, like leveling up a Pokémon encounter.
+5. **Offline-first** — Works 100% without internet. Website sync is optional bonus.
+6. **Node identity** — Track by `node_num` (stable uint32). `node_id` (`!hex` string)
+   is also stable and stored, but `node_num` is the primary key.
+
 ## Open Questions
 
-1. **Rarity tiers** — Should rarity be hardcoded based on our guesses, or calculated
-   dynamically from community data once the website exists?
-2. **Node identity** — Nodes can change their long_name. Should we track by `node_num`
-   (stable) or `node_id` (the `!hex` string, also stable)?
-3. **MQTT nodes** — Nodes seen via MQTT (`via_mqtt=true`) are "easier" to collect.
-   Should they count differently? (Maybe a separate "RF only" collection?)
-4. **Privacy** — GPS positions of other people's nodes are sensitive. Should we only
-   store approximate positions, or let users opt in?
-5. **Offline-first** — The whole point is mesh/offline. The app should work 100%
-   without internet. Website sync is a bonus.
+1. **Tier thresholds** — The SNR/hop cutoffs for each tier need tuning with real-world
+   data. Starting values are a guess; should be configurable.
+2. **Sensor detection** — Sensors aren't directly in NodeInfo; they show up when a node
+   broadcasts telemetry. Do we infer sensor types from received telemetry packets?
+3. **Node spoofing** — Meshtastic doesn't strongly authenticate node identity. Should
+   we care about fake/spoofed nodes for a casual game? Probably not initially.
+4. **Multiple devices** — If a user has two phones, can they merge MeshDex databases?
+   The JSON export/import should handle this (merge by node_num, keep best tier).
